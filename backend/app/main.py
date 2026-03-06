@@ -279,11 +279,11 @@ def start_enhancement(request: dict):
     print(f"[ENHANCE] Enhancement complete for {infocube_id}")
     return {
         "status": "completed",
-            "infocube_id": infocube_id,
-            "model_id": model_id,
-            "dimensions_processed": len(dimensions),
-            "avg_confidence": round(avg_confidence, 2)
-        }
+        "infocube_id": infocube_id,
+        "model_id": model_id,
+        "dimensions_processed": len(dimensions),
+        "avg_confidence": round(avg_confidence, 2)
+    }
 
 @app.get("/api/enhancement/{infocube_id}")
 def get_enhancement_details(infocube_id: str):
