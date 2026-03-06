@@ -107,44 +107,59 @@ def get_infocubes():
 @app.post("/api/enhancement/start")
 def start_enhancement(request: dict):
     """Start real AI enhancement process"""
-    infocube_id = request.get("infocube_id")
+    try:
+        infocube_id = request.get("infocube_id")
 
-    if not infocube_id:
-        raise HTTPException(status_code=400, detail="infocube_id required")
+        if not infocube_id:
+            raise HTTPException(status_code=400, detail="infocube_id required")
 
-    if not settings.ANTHROPIC_API_KEY:
-        raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured")
+        if not settings.ANTHROPIC_API_KEY:
+            raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured")
 
-    bw_engine = get_bw_engine()
-    bdc_engine = get_bdc_engine()
+        bw_engine = get_bw_engine()
+        bdc_engine = get_bdc_engine()
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Enhancement initialization error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Initialization error: {str(e)}")
 
     # Get InfoCube info
     with bw_engine.connect() as conn:
-        result = conn.execute(text("""
-            SELECT description FROM bw_source.infocubes WHERE infocube_id = :id
-        """), {"id": infocube_id})
-        row = result.fetchone()
-        if not row:
-            raise HTTPException(status_code=404, detail="InfoCube not found")
+        try:
+            result = conn.execute(text("""
+                SELECT description FROM bw_source.infocubes WHERE infocube_id = :id
+            """), {"id": infocube_id})
+            row = result.fetchone()
+            if not row:
+                raise HTTPException(status_code=404, detail="InfoCube not found")
 
-        infocube_name = row[0]
+            infocube_name = row[0]
 
-        # Get dimensions
-        result = conn.execute(text("""
-            SELECT dimension_id, dimension_name, description, sample_values
-            FROM bw_source.dimensions
-            WHERE infocube_id = :id
-        """), {"id": infocube_id})
+            # Get dimensions
+            result = conn.execute(text("""
+                SELECT dimension_id, dimension_name, description, sample_values
+                FROM bw_source.dimensions
+                WHERE infocube_id = :id
+            """), {"id": infocube_id})
 
-        dimensions = []
-        total_confidence = 0.0
+            dimensions = []
+            total_confidence = 0.0
 
-        for dim_row in result:
-            dim_id, dim_name, description, sample_json = dim_row
-            sample_values = json.loads(sample_json) if sample_json else []
+            for dim_row in result:
+                dim_id, dim_name, description, sample_json = dim_row
+                sample_values = json.loads(sample_json) if sample_json else []
 
-            # REAL AI CLASSIFICATION
-            classification = classify_dimension(dim_name, description, sample_values)
+                # REAL AI CLASSIFICATION
+                try:
+                    classification = classify_dimension(dim_name, description, sample_values)
+                except Exception as ai_error:
+                    print(f"AI classification error for {dim_name}: {ai_error}")
+                    import traceback
+                    traceback.print_exc()
+                    raise HTTPException(status_code=500, detail=f"AI classification failed: {str(ai_error)}")
 
             dimensions.append({
                 "dimension_id": dim_id,
