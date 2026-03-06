@@ -30,6 +30,30 @@ async def startup():
 def read_root():
     return {"status": "BW-BDC Backend Running", "version": "2.0 - REAL AI"}
 
+@app.get("/test-ai")
+def test_ai():
+    """Test AI API directly"""
+    try:
+        if not settings.ANTHROPIC_API_KEY:
+            return {"error": "ANTHROPIC_API_KEY not configured"}
+
+        from app.ai_engine import classify_dimension
+        result = classify_dimension("0PLANT", "Plant", ["PL01", "PL02"])
+
+        return {
+            "status": "success",
+            "result": result,
+            "model_used": settings.AI_MODEL
+        }
+    except Exception as e:
+        import traceback
+        return {
+            "status": "error",
+            "error": str(e),
+            "error_type": type(e).__name__,
+            "traceback": traceback.format_exc()
+        }
+
 @app.get("/health")
 def health_check():
     return {
