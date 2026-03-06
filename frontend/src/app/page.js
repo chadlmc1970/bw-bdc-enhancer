@@ -7,14 +7,49 @@ export default function Home() {
   const [stats, setStats] = useState(null)
   const [infocubes, setInfocubes] = useState([])
   const [loading, setLoading] = useState(true)
+  const [wakingUp, setWakingUp] = useState(false)
   const [enhancing, setEnhancing] = useState(null)
   const [resetting, setResetting] = useState(false)
+
+  // Retry fetch with exponential backoff for cold starts
+  const fetchWithRetry = async (url, options = {}, retries = 3) => {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const controller = new AbortController()
+        const timeout = setTimeout(() => controller.abort(), 60000) // 60s timeout
+
+        const response = await fetch(url, {
+          ...options,
+          signal: controller.signal
+        })
+
+        clearTimeout(timeout)
+        return response
+      } catch (err) {
+        if (i === retries - 1) throw err
+        const delay = Math.min(1000 * Math.pow(2, i), 10000) // exponential backoff, max 10s
+        await new Promise(resolve => setTimeout(resolve, delay))
+      }
+    }
+  }
+
+  // Wake up the backend on first load
+  const wakeUpBackend = async () => {
+    setWakingUp(true)
+    try {
+      await fetchWithRetry(`${API}/health`)
+    } catch (err) {
+      console.warn('Health check failed:', err)
+    } finally {
+      setWakingUp(false)
+    }
+  }
 
   const loadData = async () => {
     try {
       const [statsRes, cubesRes] = await Promise.all([
-        fetch(`${API}/api/dashboard/stats`),
-        fetch(`${API}/api/source/infocubes`)
+        fetchWithRetry(`${API}/api/dashboard/stats`),
+        fetchWithRetry(`${API}/api/source/infocubes`)
       ])
       const statsData = await statsRes.json()
       const cubesData = await cubesRes.json()
@@ -28,13 +63,14 @@ export default function Home() {
   }
 
   useEffect(() => {
-    loadData()
+    // Wake up backend first, then load data
+    wakeUpBackend().then(() => loadData())
   }, [])
 
   const handleEnhance = async (infocubeId) => {
     setEnhancing(infocubeId)
     try {
-      const res = await fetch(`${API}/api/enhancement/start`, {
+      const res = await fetchWithRetry(`${API}/api/enhancement/start`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ infocube_id: infocubeId })
@@ -62,7 +98,7 @@ export default function Home() {
 
     setResetting(true)
     try {
-      const res = await fetch(`${API}/api/reset`, { method: 'POST' })
+      const res = await fetchWithRetry(`${API}/api/reset`, { method: 'POST' })
       if (res.ok) {
         await loadData()
         alert('System reset complete!')
@@ -76,10 +112,20 @@ export default function Home() {
     }
   }
 
-  if (loading) {
+  if (loading || wakingUp) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
-        <div className="text-white text-xl">Loading dashboard...</div>
+        <div className="text-center">
+          <div className="text-white text-2xl mb-4">
+            {wakingUp ? '🚀 Waking up backend...' : 'Loading dashboard...'}
+          </div>
+          <div className="text-purple-300 text-sm">
+            {wakingUp ? 'Render cold start detected. This may take 30-60 seconds.' : 'Please wait'}
+          </div>
+          <div className="mt-6 flex justify-center">
+            <div className="w-16 h-16 border-4 border-purple-500 border-t-transparent rounded-full animate-spin"></div>
+          </div>
+        </div>
       </div>
     )
   }

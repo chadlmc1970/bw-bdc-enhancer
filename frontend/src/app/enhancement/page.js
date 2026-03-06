@@ -5,6 +5,28 @@ import Link from 'next/link'
 
 const API = 'https://bw-bdc-backend.onrender.com'
 
+// Retry fetch with exponential backoff for cold starts
+const fetchWithRetry = async (url, options = {}, retries = 3) => {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 60000) // 60s timeout
+
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal
+      })
+
+      clearTimeout(timeout)
+      return response
+    } catch (err) {
+      if (i === retries - 1) throw err
+      const delay = Math.min(1000 * Math.pow(2, i), 10000) // exponential backoff, max 10s
+      await new Promise(resolve => setTimeout(resolve, delay))
+    }
+  }
+}
+
 function EnhancementContent() {
   const searchParams = useSearchParams()
   const infocubeId = searchParams.get('id') || '0FIGL_C10'
@@ -15,7 +37,7 @@ function EnhancementContent() {
   const [activeTab, setActiveTab] = useState('dimensions')
 
   useEffect(() => {
-    fetch(`${API}/api/enhancement/${infocubeId}`)
+    fetchWithRetry(`${API}/api/enhancement/${infocubeId}`)
       .then(r => {
         if (!r.ok) throw new Error('Failed to load')
         return r.json()
