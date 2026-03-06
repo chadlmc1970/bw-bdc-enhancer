@@ -149,6 +149,7 @@ export default function Home() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-purple-200 uppercase tracking-wider">ID</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-purple-200 uppercase tracking-wider">Name</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-purple-200 uppercase tracking-wider">Dimensions</th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-purple-200 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-purple-200 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
@@ -159,9 +160,23 @@ export default function Home() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-purple-200">{cube.name}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-purple-200">{cube.dimensions}</td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <button className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all">
-                        Enhance with AI
-                      </button>
+                      {cube.status === 'enhanced' ? (
+                        <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-xs font-medium border border-green-500/30">
+                          Enhanced
+                        </span>
+                      ) : (
+                        <span className="bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded-full text-xs font-medium border border-yellow-500/30">
+                          Pending
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <a
+                        href={`/enhancement?id=${cube.id}`}
+                        className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all inline-block"
+                      >
+                        {cube.status === 'enhanced' ? 'View Details' : 'Enhance with AI'}
+                      </a>
                     </td>
                   </tr>
                 ))}
