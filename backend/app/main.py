@@ -32,7 +32,12 @@ def read_root():
 
 @app.get("/health")
 def health_check():
-    return {"status": "healthy", "ai_configured": bool(settings.ANTHROPIC_API_KEY)}
+    return {
+        "status": "healthy",
+        "ai_configured": bool(settings.ANTHROPIC_API_KEY),
+        "ai_key_length": len(settings.ANTHROPIC_API_KEY) if settings.ANTHROPIC_API_KEY else 0,
+        "ai_model": settings.AI_MODEL
+    }
 
 @app.post("/api/reset")
 def reset_system():
