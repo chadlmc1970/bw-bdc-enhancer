@@ -1,25 +1,48 @@
 'use client'
 import { useEffect, useState } from 'react'
 
+const API = 'https://bw-bdc-backend.onrender.com'
+
 export default function Home() {
   const [stats, setStats] = useState(null)
   const [infocubes, setInfocubes] = useState([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
 
   useEffect(() => {
-    const API = process.env.NEXT_PUBLIC_API_URL || 'https://bw-bdc-backend.onrender.com'
+    async function loadData() {
+      try {
+        const [statsRes, cubesRes] = await Promise.all([
+          fetch(`${API}/api/dashboard/stats`),
+          fetch(`${API}/api/source/infocubes`)
+        ])
 
-    Promise.all([
-      fetch(`${API}/api/dashboard/stats`).then(r => r.json()),
-      fetch(`${API}/api/source/infocubes`).then(r => r.json())
-    ]).then(([statsData, cubesData]) => {
-      setStats(statsData)
-      setInfocubes(cubesData)
-      setLoading(false)
-    })
+        if (!statsRes.ok || !cubesRes.ok) {
+          throw new Error('API request failed')
+        }
+
+        const statsData = await statsRes.json()
+        const cubesData = await cubesRes.json()
+
+        setStats(statsData)
+        setInfocubes(cubesData)
+      } catch (err) {
+        setError(err.message)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    loadData()
   }, [])
 
-  if (loading) return <div style={{padding: '50px'}}>Loading...</div>
+  if (loading) {
+    return <div style={{padding: '50px', fontFamily: 'system-ui'}}>Loading dashboard...</div>
+  }
+
+  if (error) {
+    return <div style={{padding: '50px', fontFamily: 'system-ui', color: 'red'}}>Error: {error}</div>
+  }
 
   return (
     <div style={{padding: '50px', fontFamily: 'system-ui', background: '#f8fafc', minHeight: '100vh'}}>
