@@ -128,38 +128,37 @@ def start_enhancement(request: dict):
 
     # Get InfoCube info
     with bw_engine.connect() as conn:
-        try:
-            result = conn.execute(text("""
-                SELECT description FROM bw_source.infocubes WHERE infocube_id = :id
-            """), {"id": infocube_id})
-            row = result.fetchone()
-            if not row:
-                raise HTTPException(status_code=404, detail="InfoCube not found")
+        result = conn.execute(text("""
+            SELECT description FROM bw_source.infocubes WHERE infocube_id = :id
+        """), {"id": infocube_id})
+        row = result.fetchone()
+        if not row:
+            raise HTTPException(status_code=404, detail="InfoCube not found")
 
-            infocube_name = row[0]
+        infocube_name = row[0]
 
-            # Get dimensions
-            result = conn.execute(text("""
-                SELECT dimension_id, dimension_name, description, sample_values
-                FROM bw_source.dimensions
-                WHERE infocube_id = :id
-            """), {"id": infocube_id})
+        # Get dimensions
+        result = conn.execute(text("""
+            SELECT dimension_id, dimension_name, description, sample_values
+            FROM bw_source.dimensions
+            WHERE infocube_id = :id
+        """), {"id": infocube_id})
 
-            dimensions = []
-            total_confidence = 0.0
+        dimensions = []
+        total_confidence = 0.0
 
-            for dim_row in result:
-                dim_id, dim_name, description, sample_json = dim_row
-                sample_values = json.loads(sample_json) if sample_json else []
+        for dim_row in result:
+            dim_id, dim_name, description, sample_json = dim_row
+            sample_values = json.loads(sample_json) if sample_json else []
 
-                # REAL AI CLASSIFICATION
-                try:
-                    classification = classify_dimension(dim_name, description, sample_values)
-                except Exception as ai_error:
-                    print(f"AI classification error for {dim_name}: {ai_error}")
-                    import traceback
-                    traceback.print_exc()
-                    raise HTTPException(status_code=500, detail=f"AI classification failed: {str(ai_error)}")
+            # REAL AI CLASSIFICATION
+            try:
+                classification = classify_dimension(dim_name, description, sample_values)
+            except Exception as ai_error:
+                print(f"AI classification error for {dim_name}: {ai_error}")
+                import traceback
+                traceback.print_exc()
+                raise HTTPException(status_code=500, detail=f"AI classification failed: {str(ai_error)}")
 
             dimensions.append({
                 "dimension_id": dim_id,
