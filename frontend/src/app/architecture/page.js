@@ -19,7 +19,7 @@ export default function Architecture() {
           <h2 className="text-2xl font-bold text-white mb-4">System Overview</h2>
           <p className="text-purple-200 text-lg leading-relaxed">
             This platform demonstrates AI-powered semantic enhancement of SAP Business Warehouse (BW) metadata for migration to SAP Business Data Cloud (BDC) Datasphere.
-            Using Claude Opus 4.6, the system automatically classifies dimensions, detects hierarchies, translates formulas, and validates data quality—transforming legacy
+            Using Claude Opus 4.6, the system automatically classifies dimensions, detects hierarchies, translates formulas, and validates data quality, transforming legacy
             BW structures into modern, semantically-enriched Datasphere models.
           </p>
         </div>
@@ -143,7 +143,7 @@ export default function Architecture() {
                   <strong>Neon PostgreSQL:</strong> <code className="bg-black/40 px-2 py-1 rounded text-xs">ep-weathered-sea-ain8b9ju</code>
                 </p>
                 <p className="text-purple-300 text-xs">
-                  Stores AI-enhanced models with semantic types, detected hierarchies, translated formulas, and data quality reports—
+                  Stores AI-enhanced models with semantic types, detected hierarchies, translated formulas, and data quality reports,
                   representing the enriched Datasphere metadata layer.
                 </p>
               </div>
