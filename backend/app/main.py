@@ -173,7 +173,7 @@ def start_enhancement(request: dict):
         infocube_name = row[0]
         print(f"[ENHANCE] InfoCube name: {infocube_name}")
 
-        # Get dimensions
+        # Get dimensions - fetch ALL rows before closing connection
         print(f"[ENHANCE] Querying dimensions...")
         result = conn.execute(text("""
             SELECT dimension_id, dimension_name, description, sample_values
@@ -181,93 +181,104 @@ def start_enhancement(request: dict):
             WHERE infocube_id = :id
         """), {"id": infocube_id})
 
-        dimensions = []
-        total_confidence = 0.0
+        # Fetch all dimension rows into memory
+        dimension_rows = result.fetchall()
+        print(f"[ENHANCE] Found {len(dimension_rows)} dimensions")
 
-        dim_count = 0
-        for dim_row in result:
-            dim_count += 1
-            dim_id, dim_name, description, sample_json = dim_row
-            print(f"[ENHANCE] Processing dimension {dim_count}: {dim_name}")
-            sample_values = json.loads(sample_json) if sample_json else []
+    # Connection is now closed - process dimensions with AI
+    print(f"[ENHANCE] BW connection closed, starting AI processing...")
+    dimensions = []
+    total_confidence = 0.0
 
-            # REAL AI CLASSIFICATION
-            try:
-                print(f"[ENHANCE] Classifying dimension {dim_name}...")
-                classification = classify_dimension(dim_name, description, sample_values)
-                print(f"[ENHANCE] Classification complete for {dim_name}: {classification['semantic_type']}")
-            except Exception as ai_error:
-                print(f"AI classification error for {dim_name}: {ai_error}")
-                import traceback
-                traceback.print_exc()
-                raise HTTPException(status_code=500, detail=f"AI classification failed: {str(ai_error)}")
+    for idx, dim_row in enumerate(dimension_rows, 1):
+        dim_id, dim_name, description, sample_json = dim_row
+        print(f"[ENHANCE] Processing dimension {idx}/{len(dimension_rows)}: {dim_name}")
+        sample_values = json.loads(sample_json) if sample_json else []
 
-            dimensions.append({
-                "dimension_id": dim_id,
-                "dimension_name": dim_name,
-                "description": description,
-                "semantic_type": classification["semantic_type"],
-                "confidence": classification["confidence"],
-                "reasoning": classification["reasoning"],
-                "display_format": classification["display_format"],
-                "sort_order": classification["sort_order"]
-            })
+        # REAL AI CLASSIFICATION
+        try:
+            print(f"[ENHANCE] Classifying dimension {dim_name}...")
+            classification = classify_dimension(dim_name, description, sample_values)
+            print(f"[ENHANCE] Classification complete for {dim_name}: {classification['semantic_type']}")
+        except Exception as ai_error:
+            print(f"AI classification error for {dim_name}: {ai_error}")
+            import traceback
+            traceback.print_exc()
+            raise HTTPException(status_code=500, detail=f"AI classification failed: {str(ai_error)}")
 
-            total_confidence += classification["confidence"]
+        dimensions.append({
+            "dimension_id": dim_id,
+            "dimension_name": dim_name,
+            "description": description,
+            "semantic_type": classification["semantic_type"],
+            "confidence": classification["confidence"],
+            "reasoning": classification["reasoning"],
+            "display_format": classification["display_format"],
+            "sort_order": classification["sort_order"]
+        })
 
-        avg_confidence = total_confidence / len(dimensions) if dimensions else 0.0
+        total_confidence += classification["confidence"]
 
-        # Write to BDC database
-        model_id = f"MODEL_{infocube_id}"
+    avg_confidence = total_confidence / len(dimensions) if dimensions else 0.0
+    print(f"[ENHANCE] All dimensions classified. Average confidence: {avg_confidence:.2f}")
 
-        with bdc_engine.connect() as bdc_conn:
-            # Delete existing
+    # Write to BDC database
+    model_id = f"MODEL_{infocube_id}"
+    print(f"[ENHANCE] Writing to BDC database...")
+
+    with bdc_engine.connect() as bdc_conn:
+        # Delete existing
+        print(f"[ENHANCE] Deleting existing model data...")
+        bdc_conn.execute(text("""
+            DELETE FROM bdc_target.dimensions WHERE model_id = :id
+        """), {"id": model_id})
+
+        bdc_conn.execute(text("""
+            DELETE FROM bdc_target.datasphere_models WHERE model_id = :id
+        """), {"id": model_id})
+
+        # Insert model
+        print(f"[ENHANCE] Inserting model metadata...")
+        bdc_conn.execute(text("""
+            INSERT INTO bdc_target.datasphere_models
+            (model_id, model_name, source_infocube_id, enhanced_at, ai_confidence_score, status)
+            VALUES (:model_id, :name, :source_id, :enhanced_at, :confidence, :status)
+        """), {
+            "model_id": model_id,
+            "name": infocube_name,
+            "source_id": infocube_id,
+            "enhanced_at": datetime.utcnow(),
+            "confidence": round(avg_confidence, 2),
+            "status": "completed"
+        })
+
+        # Insert dimensions
+        print(f"[ENHANCE] Inserting {len(dimensions)} dimensions...")
+        for dim in dimensions:
             bdc_conn.execute(text("""
-                DELETE FROM bdc_target.dimensions WHERE model_id = :id
-            """), {"id": model_id})
-
-            bdc_conn.execute(text("""
-                DELETE FROM bdc_target.datasphere_models WHERE model_id = :id
-            """), {"id": model_id})
-
-            # Insert model
-            bdc_conn.execute(text("""
-                INSERT INTO bdc_target.datasphere_models
-                (model_id, model_name, source_infocube_id, enhanced_at, ai_confidence_score, status)
-                VALUES (:model_id, :name, :source_id, :enhanced_at, :confidence, :status)
+                INSERT INTO bdc_target.dimensions
+                (dimension_id, model_id, dimension_name, source_dimension_id, ai_semantic_type,
+                 ai_confidence, ai_reasoning, display_format, sort_order)
+                VALUES (:dim_id, :model_id, :dim_name, :source_id, :semantic_type,
+                        :confidence, :reasoning, :display_format, :sort_order)
             """), {
+                "dim_id": f"{model_id}_{dim['dimension_name']}",
                 "model_id": model_id,
-                "name": infocube_name,
-                "source_id": infocube_id,
-                "enhanced_at": datetime.utcnow(),
-                "confidence": round(avg_confidence, 2),
-                "status": "completed"
+                "dim_name": dim['dimension_name'],
+                "source_id": dim['dimension_id'],
+                "semantic_type": dim['semantic_type'],
+                "confidence": dim['confidence'],
+                "reasoning": dim['reasoning'],
+                "display_format": dim['display_format'],
+                "sort_order": dim['sort_order']
             })
 
-            # Insert dimensions
-            for dim in dimensions:
-                bdc_conn.execute(text("""
-                    INSERT INTO bdc_target.dimensions
-                    (dimension_id, model_id, dimension_name, source_dimension_id, ai_semantic_type,
-                     ai_confidence, ai_reasoning, display_format, sort_order)
-                    VALUES (:dim_id, :model_id, :dim_name, :source_id, :semantic_type,
-                            :confidence, :reasoning, :display_format, :sort_order)
-                """), {
-                    "dim_id": f"{model_id}_{dim['dimension_name']}",
-                    "model_id": model_id,
-                    "dim_name": dim['dimension_name'],
-                    "source_id": dim['dimension_id'],
-                    "semantic_type": dim['semantic_type'],
-                    "confidence": dim['confidence'],
-                    "reasoning": dim['reasoning'],
-                    "display_format": dim['display_format'],
-                    "sort_order": dim['sort_order']
-                })
+        bdc_conn.commit()
+        print(f"[ENHANCE] BDC database write complete")
 
-            bdc_conn.commit()
-
-        return {
-            "status": "completed",
+    print(f"[ENHANCE] Enhancement complete for {infocube_id}")
+    return {
+        "status": "completed",
             "infocube_id": infocube_id,
             "model_id": model_id,
             "dimensions_processed": len(dimensions),
