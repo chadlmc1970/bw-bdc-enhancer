@@ -136,8 +136,10 @@ def get_infocubes():
 @app.post("/api/enhancement/start")
 def start_enhancement(request: dict):
     """Start real AI enhancement process"""
+    print(f"[ENHANCE] Starting enhancement for request: {request}")
     try:
         infocube_id = request.get("infocube_id")
+        print(f"[ENHANCE] InfoCube ID: {infocube_id}")
 
         if not infocube_id:
             raise HTTPException(status_code=400, detail="infocube_id required")
@@ -145,8 +147,10 @@ def start_enhancement(request: dict):
         if not settings.ANTHROPIC_API_KEY:
             raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured")
 
+        print(f"[ENHANCE] Getting database engines...")
         bw_engine = get_bw_engine()
         bdc_engine = get_bdc_engine()
+        print(f"[ENHANCE] Database engines initialized")
     except HTTPException:
         raise
     except Exception as e:
@@ -156,7 +160,9 @@ def start_enhancement(request: dict):
         raise HTTPException(status_code=500, detail=f"Initialization error: {str(e)}")
 
     # Get InfoCube info
+    print(f"[ENHANCE] Connecting to BW database...")
     with bw_engine.connect() as conn:
+        print(f"[ENHANCE] Querying InfoCube metadata...")
         result = conn.execute(text("""
             SELECT description FROM bw_source.infocubes WHERE infocube_id = :id
         """), {"id": infocube_id})
@@ -165,8 +171,10 @@ def start_enhancement(request: dict):
             raise HTTPException(status_code=404, detail="InfoCube not found")
 
         infocube_name = row[0]
+        print(f"[ENHANCE] InfoCube name: {infocube_name}")
 
         # Get dimensions
+        print(f"[ENHANCE] Querying dimensions...")
         result = conn.execute(text("""
             SELECT dimension_id, dimension_name, description, sample_values
             FROM bw_source.dimensions
@@ -176,13 +184,18 @@ def start_enhancement(request: dict):
         dimensions = []
         total_confidence = 0.0
 
+        dim_count = 0
         for dim_row in result:
+            dim_count += 1
             dim_id, dim_name, description, sample_json = dim_row
+            print(f"[ENHANCE] Processing dimension {dim_count}: {dim_name}")
             sample_values = json.loads(sample_json) if sample_json else []
 
             # REAL AI CLASSIFICATION
             try:
+                print(f"[ENHANCE] Classifying dimension {dim_name}...")
                 classification = classify_dimension(dim_name, description, sample_values)
+                print(f"[ENHANCE] Classification complete for {dim_name}: {classification['semantic_type']}")
             except Exception as ai_error:
                 print(f"AI classification error for {dim_name}: {ai_error}")
                 import traceback
