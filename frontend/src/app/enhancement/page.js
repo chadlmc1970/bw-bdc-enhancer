@@ -1,22 +1,27 @@
 'use client'
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
 const API = 'https://bw-bdc-backend.onrender.com'
 
-export default function EnhancementDetails() {
+function EnhancementContent() {
   const searchParams = useSearchParams()
   const infocubeId = searchParams.get('id') || '0FIGL_C10'
 
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
   const [activeTab, setActiveTab] = useState('dimensions')
 
   useEffect(() => {
     fetch(`${API}/api/enhancement/${infocubeId}`)
-      .then(r => r.json())
+      .then(r => {
+        if (!r.ok) throw new Error('Failed to load')
+        return r.json()
+      })
       .then(setData)
+      .catch(err => setError(err.message))
       .finally(() => setLoading(false))
   }, [infocubeId])
 
@@ -24,6 +29,17 @@ export default function EnhancementDetails() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
         <div className="text-white text-xl">Loading enhancement details...</div>
+      </div>
+    )
+  }
+
+  if (error || !data) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-red-400 text-xl mb-4">Failed to load enhancement data</div>
+          <Link href="/" className="text-purple-300 hover:text-purple-200">← Back to Dashboard</Link>
+        </div>
       </div>
     )
   }
@@ -226,5 +242,17 @@ export default function EnhancementDetails() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function EnhancementDetails() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900 flex items-center justify-center">
+        <div className="text-white text-xl">Loading...</div>
+      </div>
+    }>
+      <EnhancementContent />
+    </Suspense>
   )
 }
