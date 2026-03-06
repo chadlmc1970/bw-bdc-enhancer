@@ -5,9 +5,14 @@ import json
 def classify_dimension(dimension_name: str, description: str, sample_values: list) -> dict:
     """Use Claude to classify a dimension semantically"""
 
+    print(f"[AI] Classifying dimension: {dimension_name}")
+    print(f"[AI] Description: {description}")
+    print(f"[AI] Sample values: {sample_values}")
+
     if not settings.ANTHROPIC_API_KEY:
         raise ValueError("ANTHROPIC_API_KEY not configured")
 
+    print(f"[AI] Using model: {settings.AI_MODEL}")
     client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
 
     prompt = f"""Analyze this SAP BW dimension and classify its semantic type.
@@ -34,16 +39,25 @@ Return a JSON object with:
 
 Be concise and confident."""
 
-    message = client.messages.create(
-        model=settings.AI_MODEL,
-        max_tokens=settings.AI_MAX_TOKENS,
-        temperature=settings.AI_TEMPERATURE,
-        messages=[
-            {"role": "user", "content": prompt}
-        ]
-    )
+    try:
+        print(f"[AI] Calling Claude API...")
+        message = client.messages.create(
+            model=settings.AI_MODEL,
+            max_tokens=settings.AI_MAX_TOKENS,
+            temperature=settings.AI_TEMPERATURE,
+            messages=[
+                {"role": "user", "content": prompt}
+            ]
+        )
 
-    response_text = message.content[0].text
+        print(f"[AI] API call successful")
+        response_text = message.content[0].text
+        print(f"[AI] Response: {response_text[:200]}...")
+    except Exception as api_error:
+        print(f"[AI] API call failed: {type(api_error).__name__}: {str(api_error)}")
+        import traceback
+        traceback.print_exc()
+        raise
 
     # Extract JSON from response
     try:
