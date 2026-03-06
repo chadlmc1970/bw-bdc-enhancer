@@ -41,8 +41,18 @@ export default function Home() {
       {/* Header */}
       <div className="bg-black/20 backdrop-blur-sm border-b border-white/10">
         <div className="max-w-7xl mx-auto px-8 py-6">
-          <h1 className="text-3xl font-bold text-white">BW-BDC AI Enhancement Platform</h1>
-          <p className="text-purple-200 mt-1">AI-powered semantic enhancement for SAP BW to Business Data Cloud</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-white">BW-BDC AI Enhancement Platform</h1>
+              <p className="text-purple-200 mt-1">AI-powered semantic enhancement for SAP BW to Business Data Cloud</p>
+            </div>
+            <a
+              href="/architecture"
+              className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-lg font-medium transition-all border border-white/20"
+            >
+              📚 Platform Architecture
+            </a>
+          </div>
         </div>
       </div>
 
