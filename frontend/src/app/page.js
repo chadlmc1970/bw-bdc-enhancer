@@ -7,26 +7,74 @@ export default function Home() {
   const [stats, setStats] = useState(null)
   const [infocubes, setInfocubes] = useState([])
   const [loading, setLoading] = useState(true)
+  const [enhancing, setEnhancing] = useState(null)
+  const [resetting, setResetting] = useState(false)
+
+  const loadData = async () => {
+    try {
+      const [statsRes, cubesRes] = await Promise.all([
+        fetch(`${API}/api/dashboard/stats`),
+        fetch(`${API}/api/source/infocubes`)
+      ])
+      const statsData = await statsRes.json()
+      const cubesData = await cubesRes.json()
+      setStats(statsData)
+      setInfocubes(cubesData)
+    } catch (err) {
+      console.error('Failed to load data:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    async function loadData() {
-      try {
-        const [statsRes, cubesRes] = await Promise.all([
-          fetch(`${API}/api/dashboard/stats`),
-          fetch(`${API}/api/source/infocubes`)
-        ])
-        const statsData = await statsRes.json()
-        const cubesData = await cubesRes.json()
-        setStats(statsData)
-        setInfocubes(cubesData)
-      } catch (err) {
-        console.error('Failed to load data:', err)
-      } finally {
-        setLoading(false)
-      }
-    }
     loadData()
   }, [])
+
+  const handleEnhance = async (infocubeId) => {
+    setEnhancing(infocubeId)
+    try {
+      const res = await fetch(`${API}/api/enhancement/start`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ infocube_id: infocubeId })
+      })
+
+      if (!res.ok) {
+        const error = await res.json()
+        alert(`Enhancement failed: ${error.detail}`)
+        return
+      }
+
+      await loadData()
+      alert('Enhancement complete! Click "View Details" to see AI results.')
+    } catch (err) {
+      alert(`Enhancement error: ${err.message}`)
+    } finally {
+      setEnhancing(null)
+    }
+  }
+
+  const handleReset = async () => {
+    if (!confirm('Reset all data? This will clear all enhancements and restore sample data.')) {
+      return
+    }
+
+    setResetting(true)
+    try {
+      const res = await fetch(`${API}/api/reset`, { method: 'POST' })
+      if (res.ok) {
+        await loadData()
+        alert('System reset complete!')
+      } else {
+        alert('Reset failed')
+      }
+    } catch (err) {
+      alert(`Reset error: ${err.message}`)
+    } finally {
+      setResetting(false)
+    }
+  }
 
   if (loading) {
     return (
@@ -38,7 +86,6 @@ export default function Home() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-purple-900 to-slate-900">
-      {/* Header */}
       <div className="bg-black/20 backdrop-blur-sm border-b border-white/10">
         <div className="max-w-7xl mx-auto px-8 py-6">
           <div className="flex items-center justify-between">
@@ -46,18 +93,26 @@ export default function Home() {
               <h1 className="text-3xl font-bold text-white">BW-BDC AI Enhancement Platform</h1>
               <p className="text-purple-200 mt-1">AI-powered semantic enhancement for SAP BW to Business Data Cloud</p>
             </div>
-            <a
-              href="/architecture"
-              className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-lg font-medium transition-all border border-white/20"
-            >
-              📚 Platform Architecture
-            </a>
+            <div className="flex gap-3">
+              <button
+                onClick={handleReset}
+                disabled={resetting}
+                className="bg-red-600/80 hover:bg-red-600 text-white px-6 py-3 rounded-lg font-medium transition-all border border-red-500/50 disabled:opacity-50"
+              >
+                {resetting ? 'Resetting...' : '🔄 Reset System'}
+              </button>
+              <a
+                href="/architecture"
+                className="bg-white/10 hover:bg-white/20 text-white px-6 py-3 rounded-lg font-medium transition-all border border-white/20"
+              >
+                📚 Platform Architecture
+              </a>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-8 py-8">
-        {/* KPI Cards */}
         <div className="grid grid-cols-4 gap-6 mb-8">
           <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
             <div className="text-purple-200 text-sm font-medium">InfoCubes</div>
@@ -77,7 +132,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* 3-Column Pipeline Visualization */}
         <div className="grid grid-cols-3 gap-6 mb-8">
           <div className="bg-white/10 backdrop-blur-md rounded-xl p-6 border border-white/20">
             <div className="flex items-center justify-between mb-4">
@@ -147,7 +201,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* InfoCubes Table */}
         <div className="bg-white/10 backdrop-blur-md rounded-xl border border-white/20 overflow-hidden">
           <div className="px-6 py-4 border-b border-white/10">
             <h2 className="text-xl font-semibold text-white">BW InfoCubes</h2>
@@ -174,6 +227,10 @@ export default function Home() {
                         <span className="bg-green-500/20 text-green-400 px-3 py-1 rounded-full text-xs font-medium border border-green-500/30">
                           Enhanced
                         </span>
+                      ) : enhancing === cube.id ? (
+                        <span className="bg-blue-500/20 text-blue-400 px-3 py-1 rounded-full text-xs font-medium border border-blue-500/30">
+                          Processing...
+                        </span>
                       ) : (
                         <span className="bg-yellow-500/20 text-yellow-400 px-3 py-1 rounded-full text-xs font-medium border border-yellow-500/30">
                           Pending
@@ -181,12 +238,22 @@ export default function Home() {
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <a
-                        href={`/enhancement?id=${cube.id}`}
-                        className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all inline-block"
-                      >
-                        {cube.status === 'enhanced' ? 'View Details' : 'Enhance with AI'}
-                      </a>
+                      {cube.status === 'enhanced' ? (
+                        <a
+                          href={`/enhancement?id=${cube.id}`}
+                          className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all inline-block"
+                        >
+                          View Details
+                        </a>
+                      ) : (
+                        <button
+                          onClick={() => handleEnhance(cube.id)}
+                          disabled={enhancing === cube.id}
+                          className="bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all disabled:opacity-50"
+                        >
+                          {enhancing === cube.id ? 'Enhancing...' : 'Enhance with AI'}
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
